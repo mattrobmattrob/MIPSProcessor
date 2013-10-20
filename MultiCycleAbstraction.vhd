@@ -1,7 +1,7 @@
 -- Name: Matt Robinson
 -- Submission Date: 10-22-13
 -- Class: CpE315 F'13
--- E-mail Adress: msrbqb@mst.edu
+-- E-mail Address: msrbqb@mst.edu
 --
 -- Creating a 32 bit Multicycle Processor
 -- LW, SW, Jr, Jump, Beq, Bne, Slt, add, sub, mpy, NOT32,
@@ -30,7 +30,7 @@ package ProcP is
 	type MEM1K is Array(0 to 1000)of std_logic_vector(31 downto 0);
 	type Popcode is (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP);
 	type Pstate is (Fetch, Decode, Execute, Retire);
-	type Tinstruction is Record
+	type Tinstruction is record
 	Opcode: Popcode;
 		Rs: std_logic_vector (0 to 3);
 		Rt: std_logic_vector (0 to 3);
@@ -38,31 +38,33 @@ package ProcP is
 		SHAMT: std_logic_vector (0 to 4); 
 		Funct: std_logic_vector (0 to 6); 
 	end record;
-	function Conv (temp: string (0 to 31)) return Tinstruction;
+	function Conv (temp: string (1 to 32)) return Tinstruction;
 	function to_record (PW: std_logic_vector (31 downto 0)) return Tinstruction;
-	function to_string (PW: std_logic_vector (31 downto 0)) return String;
+	function to_string (PW: std_logic_vector (31 downto 0)) return string;
 end package ProcP;
 --
 package body ProcP is
 --
-	function Conv (temp: string (0 to 31)) return Tinstruction is
+	function Conv (temp: string (1 to 32)) return Tinstruction is
+		variable T: Tinstruction;
 	begin
 		--convert std_logic_vector to record??
+		return T;
 	end function Conv;
 --
-	function to_string (PW: std_logic_vector (31 downto 0)) return string is
-		variable S: String(0 to 31);
+	function to_record (PW: std_logic_vector (31 downto 0)) return Tinstruction is
+		variable R: Tinstruction;
 	begin
 		-- code a logic_vector to record conversion
-		return S;
-	end function to_string;
+		return R;
+	end function to_record;
 --
-	function to_text (PW: std_logic_vector (31 downto 0)) return string is
-		variable T: string (0 to 31);
+	function to_string (PW: std_logic_vector (31 downto 0)) return string is
+		variable S: string (1 to 32);
 	begin
 		-- code to convert logic_vector to Text
-		return T;
-	end function to_text;
+		return S;
+	end function to_string;
 
 end package body ProcP;
 
@@ -119,7 +121,7 @@ begin
 					elsif (A=B) then Status_code (0 to 1) <= "00"; --report "Equal"
 					else Status_code(0 to 1) <= "10"; --report "Greater Than"
 					end if;
-				when And32 => 	Q<=A and B;
+				when And32 => 	Q<= A and B;
 				when Or32 => 	Q<= A or B;
 				when Not32 => 	Q<= not A;
 				when LW => 		action (A, B, Q, Opcode);
@@ -174,6 +176,7 @@ begin
 	Instruction <= to_record (PW);
 	Opcode <= Instruction.opcode;
 	ALU_32C: ALU_32 port map (A, B, Q, Opcode, Proc_ready, CLK, Reset);
+	
 	PControl: Process
 	begin
 		wait until (Reset = '0' and CLK'event and CLK='1');
@@ -181,32 +184,32 @@ begin
 			when Fetch =>
 				--stuff--STATE <=Decode;
 				-- code Fetch --Instruction
-				Instruction <= Memory(PC);
+				--Instruction <= to_record(Memory(PC));
 			when Decode =>
 				--stuff--STATE<= Execute;
 				-- code Decode --Instruction
 				
 				-- (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP)
-				case Instruction is
-					when '000' =>
+				-- case Instruction is
+					-- when '000' =>
 						
-					when '001' =>
+					-- when '001' =>
 						
-					when '010' =>
+					-- when '010' =>
 						
-					when '011' =>
+					-- when '011' =>
 						
-					when '100' =>
+					-- when '100' =>
 						
-					when '101' =>
+					-- when '101' =>
 						
-					when '110' =>
+					-- when '110' =>
 						
-					when '111' =>
+					-- when '111' =>
 						
-					when others =>
+					-- when others =>
 						
-				end case;
+				-- end case;
 
 			when Execute =>	
 				if (Proc_ready ='0') then STATE<= Execute;
@@ -247,11 +250,11 @@ architecture TEST of MCPROC_TB is
 	signal Instruction: Tinstruction;
 	Signal GO: std_logic;
 
-	File InFile: text is in "C:/Work/Stimulus.txt";
-	File OutFile: text is out "C:/Work/Response.txt";
+	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stimulus.txt";
+	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stim_out.txt";
 --
 begin
-	Reset <= '1', '0' after 100ps;
+	Reset <= '1','0' after 100 ps;
 	--
 	CLK_P: process
 	begin
@@ -265,22 +268,26 @@ begin
 
 	Inst_Stimulate: process
 		variable L1: line;
-		Variable S1, S2, S3, S4: string (0 to 32);
-		variable temp: string(1 to 16) := (others => ' ');
+		variable S1, S2, S3, S4: string (1 to 33);
+		variable temp: string(1 to 32) := (others => ' ');
 	begin
 		wait until (Reset='0' and Proc_ready ='1' and CLK'event and CLK= '1');
-		while not (EndFile (InFile)) loop
+		while not (EndFile(InFile)) loop
 			Go <= '0';
-			READLINE (InFile, L1);-- you might need to read into a	--line!
-			READ (L1, temp);
-			Instruction <= Conv (temp);
+			READLINE(InFile, L1);-- you might need to read into a	--line!
+			READ(L1, temp);
+			Instruction <= Conv(temp);
 
 			case Instruction.opcode is
-				when NOP => A<= A; 
+				when NOP => A <= A;
 				when others => Go <= '1'; -- will be calling the Microp
 			end case;
-			S1 := to_string (PW); S2 := to_string(A); S3 := to_string(B); S4 := to_string(Q);
-			WRITE (OutFile, S1, S2, S3, S4);
+			
+			S1 := to_string(PW);
+			S2 := to_string(A);
+			S3 := to_string(B);
+			S4 := to_string(Q);
+			WRITE(OutFile, S1 & " " & S2 & " " & S3 & " " & S4);
 		end loop;
 	end process;
 end architecture TEST;
