@@ -31,41 +31,118 @@ package ProcP is
 	type Popcode is (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP);
 	type Pstate is (Fetch, Decode, Execute, Retire);
 	type Tinstruction is record
-	Opcode: Popcode;
+		Opcode: Popcode;
 		Rs: std_logic_vector (0 to 3);
 		Rt: std_logic_vector (0 to 3);
 		Rd: std_logic_vector (0 to 3);
-		SHAMT: std_logic_vector (0 to 4); 
-		Funct: std_logic_vector (0 to 6); 
+		SHAMT: std_logic_vector (0 to 4);
+		Funct: std_logic_vector (0 to 6);
 	end record;
+	function to_std_logic(c: character) return std_logic;
+	function to_std_logic_vector(s: string) return std_logic_vector;
 	function Conv (temp: string (1 to 32)) return Tinstruction;
 	function to_record (PW: std_logic_vector (31 downto 0)) return Tinstruction;
-	function to_string (PW: std_logic_vector (31 downto 0)) return string;
+	function to_string (PW: std_logic_vector) return string;
 end package ProcP;
 --
 package body ProcP is
 --
+	function to_std_logic(c: character) return std_logic is 
+		variable sl: std_logic;
+	begin
+	case c is
+		when 'U' => 
+			sl := 'U'; 
+		when 'X' =>
+			sl := 'X';
+		when '0' => 
+			sl := '0';
+		when '1' => 
+			sl := '1';
+		when 'Z' => 
+			sl := 'Z';
+		when 'W' => 
+			sl := 'W';
+		when 'L' => 
+			sl := 'L';
+		when 'H' => 
+			sl := 'H';
+		when '-' => 
+			sl := '-';
+		when others =>
+			sl := 'X'; 
+		end case;
+		return sl;
+	end to_std_logic;
+--
+	function to_std_logic_vector(s: string) return std_logic_vector is
+		variable slv: std_logic_vector(s'high-s'low downto 0);
+		variable k: integer;
+	begin
+		k := s'high-s'low;
+		for i in s'range loop
+			slv(k) := to_std_logic(s(i));
+			k := k - 1;
+		end loop;
+		return slv;
+	end to_std_logic_vector;
+--
 	function Conv (temp: string (1 to 32)) return Tinstruction is
+		variable con: std_logic_vector (31 downto 0);
 		variable T: Tinstruction;
 	begin
-		--convert std_logic_vector to record??
+		--convert std_logic_vector to record??	
+		con := to_std_logic_vector(temp);
+		T 	:= to_record(con);
 		return T;
 	end function Conv;
 --
 	function to_record (PW: std_logic_vector (31 downto 0)) return Tinstruction is
-		variable R: Tinstruction;
+		variable T: Tinstruction;
 	begin
 		-- code a logic_vector to record conversion
-		return R;
+		case PW(31 downto 24) is
+			when "00000000"=> T.opcode := LW;
+			when "00000001"=> T.opcode := SW;
+			when "00000010"=> T.opcode := Jr;
+			when "00000011"=> T.opcode := Jump;
+			when "00000100"=> T.opcode := Beq;
+			when "00000101"=> T.opcode := Bne;
+			when "00000110"=> T.opcode := Slt;
+			when "00000111"=> T.opcode := Add;
+			when "00001000"=> T.opcode := Sub;
+			when "00001001"=> T.opcode := Mpy;
+			when "00001010"=> T.opcode := Not32;
+			when "00001011"=> T.opcode := Comp;
+			when "00001100"=> T.opcode := And32;
+			when "00001101"=> T.opcode := Or32;
+			when "00001110"=> T.opcode := Xor32;
+			when "00001111"=> T.opcode := MSLL;
+			when "00010000"=> T.opcode := MSRL;
+			when "00010001"=> T.opcode := MSLA;
+			when "00010010"=> T.opcode := MSRA;
+			when "00010011"=> T.opcode := NOP;
+			when others=> T.opcode := NOP;
+		end case;
+		-- T.Opcode	:= PW(31 downto 24);
+		T.Rs 		:= PW(23 downto 20);
+		T.Rt 		:= PW(19 downto 16);
+		T.Rd 		:= PW(15 downto 12);
+		T.SHAMT 	:= PW(11 downto 7);
+		T.funct 	:= PW(6 downto 0);
+		
+		return T;
 	end function to_record;
 --
-	function to_string (PW: std_logic_vector (31 downto 0)) return string is
-		variable S: string (1 to 32);
+	function to_string(PW: std_logic_vector) return string is
+		use std.TextIO.all;
+		variable bv: bit_vector(PW'range) := to_bitvector(PW);
+		variable lp: line;
 	begin
-		-- code to convert logic_vector to Text
-		return S;
-	end function to_string;
-
+		write(lp, bv);
+		return lp.all;
+	end;
+--
 end package body ProcP;
 
 --
@@ -182,11 +259,13 @@ begin
 		wait until (Reset = '0' and CLK'event and CLK='1');
 		case STATE is
 			when Fetch =>
-				--stuff--STATE <=Decode;
+				--stuff
 				-- code Fetch --Instruction
 				--Instruction <= to_record(Memory(PC));
+				
+				STATE <=Decode;
 			when Decode =>
-				--stuff--STATE<= Execute;
+				--stuff
 				-- code Decode --Instruction
 				
 				-- (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP)
@@ -210,7 +289,7 @@ begin
 					-- when others =>
 						
 				-- end case;
-
+				STATE<= Execute;
 			when Execute =>	
 				if (Proc_ready ='0') then STATE<= Execute;
 				else STATE <= Retire;
@@ -253,6 +332,8 @@ architecture TEST of MCPROC_TB is
 	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stimulus.txt";
 	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stim_out.txt";
 --
+	-- Potentially need this nonsense
+	for MY_PROC: MCPROC use entity work.MCPROC(First);
 begin
 	Reset <= '1','0' after 100 ps;
 	--
