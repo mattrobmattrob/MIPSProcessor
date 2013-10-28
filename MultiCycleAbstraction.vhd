@@ -26,11 +26,11 @@ use IEEE.NUMERIC_STD.UNSIGNED;
 use STD.TEXTIO.all;
 --
 package ProcP is
-	type REG32 is Array (0 to 31) of std_logic_vector(31 downto 0);
-	type MEM1K is Array(0 to 1000)of std_logic_vector(31 downto 0);
-	type Popcode is (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP);
-	type Pstate is (Fetch, Decode, Execute, Retire);
-	type Tinstruction is record
+	type REG32 			is Array (0 to 31) of std_logic_vector(31 downto 0);
+	type MEM1K 			is Array(0 to 1000)of std_logic_vector(31 downto 0);
+	type Popcode 		is (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA);
+	type Pstate 		is (Fetch, Decode, Execute, Retire);
+	type Tinstruction 	is record
 		Opcode: Popcode;
 		Rs: std_logic_vector (0 to 4);
 		Rt: std_logic_vector (0 to 4);
@@ -76,8 +76,8 @@ package body ProcP is
 	end to_std_logic;
 --
 	function to_std_logic_vector(s: string) return std_logic_vector is
-		variable slv: std_logic_vector(s'high-s'low downto 0);
-		variable k: integer;
+		variable slv: 	std_logic_vector(s'high-s'low downto 0);
+		variable k: 	integer;
 	begin
 		k := s'high-s'low;
 		for i in s'range loop
@@ -88,8 +88,8 @@ package body ProcP is
 	end to_std_logic_vector;
 --
 	function Conv (temp: string (1 to 32)) return Tinstruction is
-		variable con: std_logic_vector (31 downto 0);
-		variable T: Tinstruction;
+		variable con: 	std_logic_vector (31 downto 0);
+		variable T: 	Tinstruction;
 	begin
 		--convert std_logic_vector to record??	
 		con := to_std_logic_vector(temp);
@@ -158,10 +158,6 @@ package body ProcP is
 						--not on green card
 						T.opcode := not32;
 						--not
-					when "101001" =>
-						--not on green card
-						T.opcode := nop;
-						--nop
 					when others =>
 				end case;
 			when "100011" =>
@@ -207,12 +203,8 @@ package body ProcP is
 end package body ProcP;
 
 --
-library IEEE;
--- use IEEE.std_logic_1164.all;
--- use IEEE.STD_LOGIC_ARITH.UNSIGNED;
--- use IEEE.STD_LOGIC_UNSIGNED.all;
--- use IEEE.NUMERIC_STD.UNSIGNED;
-use IEEE.STD_LOGIC_1164.ALL;
+library ieee;
+use ieee.std_logic_1164.ALL;
 use ieee.numeric_std.all;
 --
 use work.ProcP.all;
@@ -223,9 +215,9 @@ entity ALU_32 is
 end entity ALU_32;
 --
 architecture Behavior of ALU_32 is
-	signal A, B: std_logic_vector(31 downto 0);
-	signal Q: std_logic_vector(63 downto 0);
-	signal Overflow: std_logic;
+	signal A, B: 		std_logic_vector(31 downto 0):=(others => '0');
+	signal Q: 			std_logic_vector(63 downto 0):=(others => '0');
+	signal Overflow: 	std_logic;
 	signal Status_code: std_logic_vector (0 to 3);
 --
 	procedure action (Bus_A, Bus_B: in std_logic_vector (31 downto 0); signal Bus_Q: inout std_logic_vector (63 downto 0); B_Opcode: in Popcode) is
@@ -233,24 +225,28 @@ architecture Behavior of ALU_32 is
 		variable zeros: 	std_logic_vector(31 downto 0):=(others => '0');
 		variable ones: 		std_logic_vector(31 downto 0):=(others => '1');
 	begin
-		-- You do the necessary actions
 		case B_Opcode is
 			when LW => Bus_Q <= zeros(31 downto 0) & Bus_A;
 				
 			when SW => Bus_Q <= zeros(31 downto 0) & Bus_B;
 				
-			when Jr => Bus_Q <= zeros(31 downto 1) & std_logic_vector(signed('0' & Bus_A) + signed('0' & Bus_B) + 4);
+			when Jr => Bus_Q <= zeros(31 downto 1) & std_logic_vector(signed('0' & Bus_A) + signed('0' & Bus_B));
 				
 			when JUMP => Bus_Q <= zeros(31 downto 0) & Bus_A;
 				
 			when Bne =>
 				if Bus_A /= Bus_B then
 					-- Branch
+					Bus_Q <= zeros(31 downto 0) & zeros(31 downto 1) & "1";
+				else
+					Bus_Q <= zeros(31 downto 0) & zeros(31 downto 0);
 				end if;
 				
 			when Beq =>
 				if Bus_A = Bus_B then
-					-- Branch
+					Bus_Q <= zeros(31 downto 0) & zeros(31 downto 1) & "1";
+				else
+					Bus_Q <= zeros(31 downto 0) & zeros(31 downto 0);
 				end if;
 				
 			when Slt =>
@@ -262,16 +258,16 @@ architecture Behavior of ALU_32 is
 				Bus_Q <= zeros(31 downto 0) & std_logic_vector(shift_left( signed(Bus_A), to_integer(signed(Bus_B)) ));
 			
 			when MSRL =>
-				Bus_Q <= zeros(31 downto 0) & std_logic_vector(shift_right( signed(Bus_A), to_integer(signed(Bus_B)) ));
+				-- shift_right replaces upper new bits with sign bit
+				-- need to replace those with 0s for SRA
+				temp_Q := std_logic_vector(shift_right( signed(Bus_A), to_integer(signed(Bus_B)) ));
+				Bus_Q <= zeros(31 downto 0) & (temp_Q and (zeros(31 downto (31 - to_integer(signed(Bus_B)))) & ones((31 - to_integer(signed(Bus_B))) downto 0)));
 			
 			when MSLA =>
 				Bus_Q <= zeros(31 downto 0) & std_logic_vector(shift_left( signed(Bus_A), to_integer(signed(Bus_B)) ));
 			
 			when MSRA =>
-				-- shift_right replaces upper new bits with sign bit
-				-- need to replace those with 0s for SRA
-				temp_Q := std_logic_vector(shift_right( signed(Bus_A), to_integer(signed(Bus_B)) ));
-				Bus_Q <= zeros(31 downto 0) & (temp_Q and (zeros(31 downto (31 - to_integer(signed(Bus_B)))) & ones((31 - to_integer(signed(Bus_B))) downto 0)));
+				Bus_Q <= zeros(31 downto 0) & std_logic_vector(shift_right( signed(Bus_A), to_integer(signed(Bus_B)) ));
 			
 			when others => 	Bus_Q <= Bus_Q; -- Execute a NOP
 		end case;
@@ -306,6 +302,8 @@ begin
 					elsif (A=B) then Status_code (0 to 1) <= "00"; 	--report "Equal"
 					else Status_code(0 to 1) <= "10"; 				--report "Greater Than"
 					end if;
+					
+					Q <= zeros(31 downto 0) & zeros(31 downto 2) & Status_code(0 to 1);
 				when And32 => 	Q<= zeros(31 downto 0) & (A and B);
 				when Or32 => 	Q<= zeros(31 downto 0) & (A or B);
 				when Not32 => 	Q<= zeros(31 downto 0 ) & not A;
@@ -329,13 +327,9 @@ begin
 end architecture behavior; 
 
 --
-library IEEE;
-use IEEE.std_logic_1164.all;
---use IEEE.STD_LOGIC_ARITH.UNSIGNED;
-use IEEE.STD_LOGIC_UNSIGNED.all;
---use IEEE.NUMERIC_STD.UNSIGNED;
-
-use ieee.std_logic_arith.all;
+library ieee;
+use ieee.std_logic_1164.ALL;
+use ieee.numeric_std.all;
 --
 use work.Procp.all;
 use work.all;
@@ -373,7 +367,7 @@ begin
 			when Fetch =>
 				--stuff
 				-- code Fetch --Instruction
-				PW <= Memory(conv_integer(unsigned(PC)));
+				PW <= Memory(to_integer(unsigned(PC)));
 				Instruction <= to_record(PW);
 				
 				STATE <=Decode;
@@ -381,20 +375,20 @@ begin
 				--stuff
 				-- code Decode --Instruction
 				
-				-- (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA, NOP)
+				-- (LW, SW, Jr, Jump, Beq, Bne, Slt, Add, Sub, Mpy, Not32, Comp, And32, Or32, Xor32, MSLL, MSRL, MSLA, MSRA)
 
 				-- Basic instruction format (R, I, J)
 				if Instruction.opcode = MSLL or Instruction.opcode = MSRL or Instruction.opcode = MSLA or Instruction.opcode = MSRA then
 					--ALU needs SHAMT
-					A <= R(conv_integer(unsigned(Instruction.Rt)));
-					B <= R(conv_integer(unsigned(Instruction.SHAMT)));
-					
+					A <= R(to_integer(unsigned(Instruction.Rt)));
+					B <= R(to_integer(unsigned(Instruction.SHAMT)));
+						
 				elsif PW(31 downto 26) = "000000" then
 					--interpret based upon MIPS GC column (1)
 					--R type instruction
 					
-					A <= R(conv_integer(unsigned(Instruction.Rs)));
-					B <= R(conv_integer(unsigned(Instruction.Rt)));
+					A <= R(to_integer(unsigned(Instruction.Rs)));
+					B <= R(to_integer(unsigned(Instruction.Rt)));
 				elsif Instruction.opcode = jump then
 					--interpret based upon MIPS GC column (0)
 					--J type instruction
@@ -404,8 +398,8 @@ begin
 					--interpret based upon MIPS GC column (0)
 					--I type instruction
 					
-					A <= R(conv_integer(unsigned(Instruction.Rs)));
-					B <= R(conv_integer(unsigned(Instruction.Rt)));
+					A <= R(to_integer(unsigned(Instruction.Rs)));
+					B <= R(to_integer(unsigned(Instruction.Rt)));
 					Q <= zeros(31 downto 0) & zeros(31 downto 16) & PW(15 downto 0);
 				end if;
 
@@ -417,28 +411,63 @@ begin
 				if (Proc_ready ='0') then STATE<= Execute;
 				else STATE <= Retire;
 					--do more stuff -- code Execute (ALU) Instruction
+					
+					--interpret output from BNE and BEQ and transfer to Q
+					if (Instruction.opcode = bne or Instruction.opcode = beq) then
+						if unsigned(Q) = 1 then
+							Q <= zeros(31 downto 0) & PC(31 downto 0);
+						else
+							Q <= zeros(31 downto 0) & zeros(31 downto 16) & PW(15 downto 0);
+						end if;
+					end if;
+					
 				end if;
 			when Retire =>
 				if (Proc_ready='1') then STATE <= Fetch;
 					-- code Retire (Store Register, store memory, or Load memory)
+
+					-- Basic instruction format (R, I, J)				
+					if Instruction.opcode = jump or Instruction.opcode = jr then
+						--jump PC to Q and don't increment
+						
+						-- JUMP, JR
+						PC <= Q(31 downto 0);
+						
+					elsif Instruction.opcode = lw then
+						--store grabbed value into Rt
+						
+						-- LW
+						R(to_integer(unsigned(Instruction.Rt))) <= Q(31 downto 0);
+						
+						PC <= std_logic_vector(unsigned(PC) + 4);
+						
+					elsif Instruction.opcode = sw then
+						--store value in memory(R[Rs])
+						
+						-- SW
+						Memory(to_integer(unsigned(R(to_integer(unsigned(Instruction.Rs)))))) <= Q(31 downto 0);
+						
+						PC <= std_logic_vector(unsigned(PC) + 4);
 					
-				-- Basic instruction format (R, I, J)
-				if PW(31 downto 26) = "000000" then
-					--interpret based upon MIPS GC column (1)
-					--R type instruction
-					
-					--store in target register
-				elsif Instruction.opcode = jump then
-					--interpret based upon MIPS GC column (0)
-					--J type instruction
-					
-					PC <= Q(31 downto 0);
-				else
-					--interpret based upon MIPS GC column (0)
-					--I type instruction
-					
-					--store in target register
-				end if;
+					elsif PW(31 downto 26) = "000000" then
+						--interpret based upon MIPS GC column (1)
+						--R type instruction
+						
+						-- ADD, SUB, MPY, SLL, SRL, SLA, SRA, XOR, AND, OR, NOT, SLT, Comp
+						
+						--store Q (result) in Rd
+						R(to_integer(unsigned(Instruction.Rd))) <= Q(31 downto 0);
+						
+						PC <= std_logic_vector(unsigned(PC) + 4);
+						
+					else
+						--interpret based upon MIPS GC column (0)
+						--I type instruction
+						
+						-- BEQ, BNE
+						PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 4);				
+						
+					end if;
 				end if;
 		end case;
 	end process;
@@ -450,6 +479,7 @@ use IEEE.std_logic_1164.all;
 use IEEE.STD_LOGIC_ARITH.UNSIGNED;
 use IEEE.STD_LOGIC_UNSIGNED.all;
 use IEEE.NUMERIC_STD.UNSIGNED;
+
 use work.ProcP.all;
 use STD.TEXTIO.all;
 use work.all;
@@ -501,7 +531,7 @@ begin
 			Instruction <= Conv(temp);
 
 			case Instruction.opcode is
-				when NOP => A <= A;
+				-- when NOP => A <= A;
 				when others => Go <= '1'; -- will be calling the Microp
 			end case;
 			
