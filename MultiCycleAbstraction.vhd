@@ -335,34 +335,61 @@ use work.Procp.all;
 use work.all;
 --
 entity MCProc is
-	port (PC, PW: inout std_logic_vector (31 downto 0); CLK, Reset: in std_logic);
+	port (	PC, PW			: inout std_logic_vector (31 downto 0) := (others => '0');
+			CLK, Reset		: in std_logic;
+			Memory			: inout MEM1K := ((others=> (others=>'0'))));
 end entity MCProc;
 --
 architecture First of MCProc is
 	--
 	component ALU_32
-		port (A_bus, B_bus: in std_logic_vector(31 downto 0); Q_bus: inout std_logic_vector(63 downto 0); Opcode: in Popcode; Proc_ready: out std_logic; clk, reset: in std_logic);
+		port (	A_bus, B_bus	: in std_logic_vector(31 downto 0);
+				Q_bus			: inout std_logic_vector(63 downto 0);
+				Opcode			: in Popcode;
+				Proc_ready		: out std_logic;
+				clk, reset		: in std_logic);
 	end component ALU_32;
 	--
 	signal A, B: std_logic_vector (31 downto 0):= (others => '0');
 	signal Q: std_logic_vector (63 downto 0):=(others => '0');
-	Signal R: REG32;
-	signal Memory: MEM1K;
+	Signal R: REG32 := ((others=> (others=>'0')));
+	-- signal Memory: MEM1K := ((others=> (others=>'0')));
 	signal Instruction: Tinstruction;
 	signal Opcode: Popcode;
-	signal Proc_ready: std_logic;
-	signal STATE: PSTATE;
+	signal Proc_ready: std_logic := '0';
+	signal STATE: PSTATE := Fetch;
+
+	-- signal PC, PW: std_logic_vector (31 downto 0) := (others => '0');
+	
 	for ALU_32C: ALU_32 use entity work.ALU_32(Behavior);
 	--
 begin
+	-- PC <= PC_bus;
+	-- PW <= PW_bus;
+
+	--Memory <= p_Memory;
 	--Instruction <= to_record (PW);
 	--Opcode <= Instruction.opcode;
 	ALU_32C: ALU_32 port map (A, B, Q, Opcode, Proc_ready, CLK, Reset);
 	
 	PControl: Process
 		variable zeros: std_logic_vector(31 downto 0):=(others => '0');
+		
 	begin
+		if reset = '1' then
+			-- p_Memory(0)	<= "10001100000000010000000001100011";
+			-- p_Memory(1)	<= "10001100000000100000000001100100";
+			-- p_Memory(2)	<= "00000000001000100001100000100000";
+			
+			-- p_Memory(100) <= "00000000000000000000000000000000";
+			-- p_Memory(101) <= "00000000000000000000000000000001";
+			-- p_Memory(102) <= "00000000000000000000000000000010";
+			-- p_Memory(103) <= "00000000000000000000000000000011";
+			-- p_Memory(104) <= "00000000000000000000000000000100";
+		end if;
+		
 		wait until (Reset = '0' and CLK'event and CLK='1');
+		
 		case STATE is
 			when Fetch =>
 				--stuff
@@ -398,7 +425,7 @@ begin
 					--interpret based upon MIPS GC column (0)
 					--I type instruction
 					
-					A <= R(to_integer(unsigned(Instruction.Rs)));
+					A <= std_logic_vector(unsigned(R(to_integer(unsigned(Instruction.Rs)))) + unsigned(PW(15 downto 0)));
 					B <= R(to_integer(unsigned(Instruction.Rt)));
 					Q <= zeros(31 downto 0) & zeros(31 downto 16) & PW(15 downto 0);
 				end if;
@@ -423,63 +450,65 @@ begin
 					
 				end if;
 			when Retire =>
-				if (Proc_ready='1') then STATE <= Fetch;
-					-- code Retire (Store Register, store memory, or Load memory)
+				-- code Retire (Store Register, store memory, or Load memory)
 
-					-- Basic instruction format (R, I, J)				
-					if Instruction.opcode = jump or Instruction.opcode = jr then
-						--jump PC to Q and don't increment
-						
-						-- JUMP, JR
-						PC <= Q(31 downto 0);
-						
-					elsif Instruction.opcode = lw then
-						--store grabbed value into Rt
-						
-						-- LW
-						R(to_integer(unsigned(Instruction.Rt))) <= Q(31 downto 0);
-						
-						PC <= std_logic_vector(unsigned(PC) + 4);
-						
-					elsif Instruction.opcode = sw then
-						--store value in memory(R[Rs])
-						
-						-- SW
-						Memory(to_integer(unsigned(R(to_integer(unsigned(Instruction.Rs)))))) <= Q(31 downto 0);
-						
-						PC <= std_logic_vector(unsigned(PC) + 4);
+				-- Basic instruction format (R, I, J)				
+				if Instruction.opcode = jump or Instruction.opcode = jr then
+					--jump PC to Q and don't increment
 					
-					elsif PW(31 downto 26) = "000000" then
-						--interpret based upon MIPS GC column (1)
-						--R type instruction
-						
-						-- ADD, SUB, MPY, SLL, SRL, SLA, SRA, XOR, AND, OR, NOT, SLT, Comp
-						
-						--store Q (result) in Rd
-						R(to_integer(unsigned(Instruction.Rd))) <= Q(31 downto 0);
-						
-						PC <= std_logic_vector(unsigned(PC) + 4);
-						
-					else
-						--interpret based upon MIPS GC column (0)
-						--I type instruction
-						
-						-- BEQ, BNE
-						PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 4);				
-						
-					end if;
+					-- JUMP, JR
+					PC <= Q(31 downto 0);
+					
+				elsif Instruction.opcode = lw then
+					--store grabbed value into Rt
+					
+					-- LW
+					R(to_integer(unsigned(Instruction.Rt))) <= Memory(to_integer(unsigned(Q(31 downto 0))));
+					
+					-- PC <= std_logic_vector(unsigned(PC) + 4);
+					PC <= std_logic_vector(unsigned(PC) + 1);
+					
+				elsif Instruction.opcode = sw then
+					--store value in memory(R[Rs])
+					
+					-- SW
+					Memory(to_integer( unsigned(R(to_integer(unsigned(Instruction.Rs)))) + unsigned(PW(15 downto 0)) )) <= Q(31 downto 0);
+					
+					-- PC <= std_logic_vector(unsigned(PC) + 4);
+					PC <= std_logic_vector(unsigned(PC) + 1);
+				
+				elsif PW(31 downto 26) = "000000" then
+					--interpret based upon MIPS GC column (1)
+					--R type instruction
+					
+					-- ADD, SUB, MPY, SLL, SRL, SLA, SRA, XOR, AND, OR, NOT, SLT, Comp
+					
+					--store Q (result) in Rd
+					R(to_integer(unsigned(Instruction.Rd))) <= Q(31 downto 0);
+					
+					-- PC <= std_logic_vector(unsigned(PC) + 4);
+					PC <= std_logic_vector(unsigned(PC) + 1);
+					
+				else
+					--interpret based upon MIPS GC column (0)
+					--I type instruction
+					
+					-- BEQ, BNE
+					-- PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 4);
+					PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 1);
+					
 				end if;
+				
+				STATE <= Fetch;
 		end case;
 	end process;
 end architecture First;
  
 -- Test Bench for MIPS-2 Processor
-library IEEE;
-use IEEE.std_logic_1164.all;
-use IEEE.STD_LOGIC_ARITH.UNSIGNED;
-use IEEE.STD_LOGIC_UNSIGNED.all;
-use IEEE.NUMERIC_STD.UNSIGNED;
-
+library ieee;
+use ieee.std_logic_1164.ALL;
+use ieee.numeric_std.all;
+--
 use work.ProcP.all;
 use STD.TEXTIO.all;
 use work.all;
@@ -488,25 +517,33 @@ entity MCPROC_TB is
 end entity MCPROC_TB;
 --
 architecture TEST of MCPROC_TB is
-	component MCProc
-		port (PC, PW: inout std_logic_vector (31 downto 0); CLK, Reset: in std_logic);
-	end component MCProc;
---	
-	signal A, B, PC, PW: std_logic_Vector (31 downto 0):=(others => '0');
-	signal Q: std_logic_vector (63 downto 0):=(others => '0');
-	Signal Reset, CLK: std_logic;
-	signal MEMORY: MEM1K;
-	signal Proc_ready: std_logic;
+	signal A, B, PC, PW: std_logic_Vector (31 downto 0) := (others => '0');
+	signal Q: std_logic_vector (63 downto 0) := (others => '0');
+	Signal reset, clk: std_logic;
+	signal Memory: MEM1K := ((others => (others=>'0')));
+	signal proc_ready, proc_reset: std_logic := '1';
 	signal Instruction: Tinstruction;
 	Signal GO: std_logic;
-
-	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stimulus.txt";
-	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\cpe315midterm\stim_out.txt";
+	
+	signal get_data: std_logic := '0';
+--
+	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stimulus.txt";
+	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stim_out.txt";
+--
+	component MCPROC
+		port (PC, PW			: inout std_logic_vector (31 downto 0):= (others => '0');
+			  clk, reset		: std_logic;
+			  Memory			: inout MEM1K);
+	end component MCPROC;
 --
 	-- Potentially need this nonsense
 	for MY_PROC: MCPROC use entity work.MCPROC(First);
 begin
 	Reset <= '1','0' after 100 ps;
+	
+	-- Memory <= ((others => (others=>'0')));
+	-- PC_tab <= "00000000000000000000000000000000";
+	-- PW <= "00000000000000000000000000000000";
 	--
 	CLK_P: process
 	begin
@@ -516,30 +553,64 @@ begin
 		wait for 5 ps;
 	end process;
 
-	MY_PROC: MCPROC port map (PC, PW, CLK, Reset);
-
-	Inst_Stimulate: process
-		variable L1: line;
-		variable S1, S2, S3, S4: string (1 to 33);
-		variable temp: string(1 to 32) := (others => ' ');
+	MY_PROC: MCPROC port map (PC, PW, CLK, proc_reset, Memory);
+	
+	Inst_get_data: process(get_data)
+		
 	begin
-		wait until (Reset='0' and Proc_ready ='1' and CLK'event and CLK= '1');
-		while not (EndFile(InFile)) loop
-			Go <= '0';
-			READLINE(InFile, L1);-- you might need to read into a	--line!
-			READ(L1, temp);
-			Instruction <= Conv(temp);
+		
+	end process;
 
-			case Instruction.opcode is
-				-- when NOP => A <= A;
-				when others => Go <= '1'; -- will be calling the Microp
-			end case;
+	Inst_Stimulate: process(clk, reset)
+		variable temp_mem	: MEM1K;
+		variable L1			: line;
+		variable count		: integer := 0;
+		variable S1, S2, S3	: string (1 to 32);
+		variable S4			: string (1 to 64);
+		variable temp		: string(1 to 32) := (others => ' ');
+		
+		variable load_mem	: std_logic := '1';
+	begin
+		-- wait until (Reset='0' and CLK'event and CLK= '1');
+		if (Reset='0' and CLK'event and CLK= '1') then
+		
+			if (load_mem = '1') then
+				while (not endfile(InFile) and count < 1000) loop
+					-- Go <= '0';
+					readline(InFile, L1);-- you might need to read into a	--line!
+					read(L1, temp);
+
+					-- Read in instructions from file into memory structure
+					if count < 1000 then
+						-- temp_mem(count) := to_std_logic_vector(temp)(31 downto 0);
+						Memory(count) <= to_std_logic_vector(temp)(31 downto 0);
+						count := count + 1;
+					else
+						exit;
+					end if;
+					
+					
+			-- 			Instruction <= Conv(temp);
+
+			-- 			case Instruction.opcode is
+			-- 				-- when NOP => A <= A;
+			-- 				when others => Go <= '1'; -- will be calling the Microp
+			-- 			end case;
+				end loop;
+				
+				load_mem := '0';
+				
+				-- Memory <= temp_mem;
+			end if;
 			
-			S1 := to_string(PW);
-			S2 := to_string(A);
-			S3 := to_string(B);
-			S4 := to_string(Q);
-			WRITE(OutFile, S1 & " " & S2 & " " & S3 & " " & S4);
-		end loop;
+			-- S1 := to_string(PC);
+			-- S2 := to_string(PW);
+			-- S3 := to_string(B);
+			-- S4 := to_string(Q);
+			-- write(OutFile, S1 & " " & S2 & " " & S3 & " " & S4 & LF);
+
+			proc_reset <= '0';
+			
+		end if;
 	end process;
 end architecture TEST;
