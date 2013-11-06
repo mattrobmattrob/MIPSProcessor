@@ -548,9 +548,6 @@ architecture TEST of MCPROC_TB is
 	signal proc_reset: std_logic := '1';
 	signal Instruction: Tinstruction;
 --
-	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stimulus.txt";
-	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stim_out.txt";
---
 	component MCPROC
 		port (PC, PW			: inout std_logic_vector (31 downto 0):= (others => '0');
 			  clk, reset		: std_logic;
