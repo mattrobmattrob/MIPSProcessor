@@ -211,7 +211,11 @@ use work.ProcP.all;
 use work.all;
 --
 entity ALU_32 is
-	port (A_bus, B_bus: in std_logic_vector(31 downto 0); Q_bus: inout std_logic_vector(63 downto 0); Opcode: in Popcode; Proc_ready: out std_logic; clk, reset: in std_logic);
+	port (	A_bus, B_bus: in std_logic_vector(31 downto 0);
+			Q_bus: inout std_logic_vector(63 downto 0);
+			Opcode: in Popcode;
+			Proc_ready: out std_logic;
+			clk, reset: in std_logic);
 end entity ALU_32;
 --
 architecture Behavior of ALU_32 is
@@ -226,9 +230,9 @@ architecture Behavior of ALU_32 is
 		variable ones: 		std_logic_vector(31 downto 0):=(others => '1');
 	begin
 		case B_Opcode is
-			when LW => Bus_Q <= zeros(31 downto 0) & Bus_A;
+			when LW => Bus_Q <= zeros(31 downto 0) & std_logic_vector(signed(Bus_A) + signed(Bus_B));
 				
-			when SW => Bus_Q <= zeros(31 downto 0) & Bus_B;
+			when SW => Bus_Q <= zeros(31 downto 0) & std_logic_vector(signed(Bus_A) + signed(Bus_B));
 				
 			when Jr => Bus_Q <= zeros(31 downto 1) & std_logic_vector(signed('0' & Bus_A) + signed('0' & Bus_B));
 				
@@ -259,9 +263,9 @@ architecture Behavior of ALU_32 is
 			
 			when MSRL =>
 				-- shift_right replaces upper new bits with sign bit
-				-- need to replace those with 0s for SRA
+				-- need to replace those with 0s for SRL
 				temp_Q := std_logic_vector(shift_right( signed(Bus_A), to_integer(signed(Bus_B)) ));
-				Bus_Q <= zeros(31 downto 0) & (temp_Q and (zeros(31 downto (31 - to_integer(signed(Bus_B)))) & ones((31 - to_integer(signed(Bus_B))) downto 0)));
+				Bus_Q <= zeros(31 downto 0) & (temp_Q and (zeros(31 downto (31 - to_integer(signed(Bus_B)) + 1)) & ones((31 - to_integer(signed(Bus_B))) downto 0)));
 			
 			when MSLA =>
 				Bus_Q <= zeros(31 downto 0) & std_logic_vector(shift_left( signed(Bus_A), to_integer(signed(Bus_B)) ));
@@ -282,20 +286,20 @@ begin
 	begin
 		if reset='0' and clk'event and clk='1' then
 			case Opcode is
-				when Add=> Q <= zeros(31 downto 1) & std_logic_vector(signed('0' & A) + signed('0' & B));
+				when Add=> Q <= zeros(31 downto 0) & std_logic_vector(signed(A) + signed(B));
 					if unsigned(Q) > 16#FFFF# then
 						overflow<='1';
-						assert not(overflow='1') report "An overflow occurred" severity warning;
+						assert not(overflow='1') report "An overflow occurred - ADD" severity warning;
 					end if;
-				when Sub=> Q <= zeros(31 downto 1) & std_logic_vector(signed('0' & A) - signed('0' & B));
+				when Sub=> Q <= zeros(31 downto 0) & std_logic_vector(signed(A) - signed(B));
 					if signed(B) > signed(A) then
 						overflow<='1';
-						assert not(overflow='1') report "An overflow occurred" severity warning;
+						assert not(overflow='1') report "An overflow occurred - SUB" severity warning;
 					end if;
 				when MPY=> Q <= std_logic_vector(signed(A) * signed(B));
 					if unsigned(Q) > 16#FFFF# then
 						overflow<='1';
-						assert not(overflow='1') report "An overflow occurred" severity warning;
+						assert not(overflow='1') report "An overflow occurred - MPY" severity warning;
 					end if;
 				when Comp=>
 					if (A<B) then Status_code (0 to 1) <= "01"; 	--report "Less Than"
@@ -335,9 +339,9 @@ use work.Procp.all;
 use work.all;
 --
 entity MCProc is
-	port (	PC, PW			: inout std_logic_vector (31 downto 0) := (others => '0');
-			CLK, Reset		: in std_logic;
-			Memory			: inout MEM1K := ((others=> (others=>'0'))));
+	port (	PC, PW		: inout std_logic_vector (31 downto 0) := (others => '0');
+			CLK, Reset	: in std_logic;
+			Memory		: inout MEM1K := ((others=> (others=>'0'))));
 end entity MCProc;
 --
 architecture First of MCProc is
@@ -354,9 +358,9 @@ architecture First of MCProc is
 	signal Q: std_logic_vector (63 downto 0):=(others => '0');
 	Signal R: REG32 := ((others=> (others=>'0')));
 	-- signal Memory: MEM1K := ((others=> (others=>'0')));
-	signal Instruction: Tinstruction;
 	signal Opcode: Popcode;
 	signal Proc_ready: std_logic := '0';
+	signal Instruction: Tinstruction;
 	signal STATE: PSTATE := Fetch;
 
 	-- signal PC, PW: std_logic_vector (31 downto 0) := (others => '0');
@@ -364,28 +368,47 @@ architecture First of MCProc is
 	for ALU_32C: ALU_32 use entity work.ALU_32(Behavior);
 	--
 begin
-	-- PC <= PC_bus;
-	-- PW <= PW_bus;
 
-	--Memory <= p_Memory;
-	--Instruction <= to_record (PW);
-	--Opcode <= Instruction.opcode;
 	ALU_32C: ALU_32 port map (A, B, Q, Opcode, Proc_ready, CLK, Reset);
 	
 	PControl: Process
 		variable zeros: std_logic_vector(31 downto 0):=(others => '0');
-		
+		variable ones : std_logic_vector(31 downto 0):=(others => '1');
+		variable temp : std_logic_vector(31 downto 0):=(others => '0');
 	begin
 		if reset = '1' then
-			-- p_Memory(0)	<= "10001100000000010000000001100011";
-			-- p_Memory(1)	<= "10001100000000100000000001100100";
-			-- p_Memory(2)	<= "00000000001000100001100000100000";
+			-- Test instructions loaded on reset
+			Memory(0)	<= "00000000001000010000100000100100"; --NOP, essentially R(1) = R(1) and R(1)
+			Memory(1)	<= "10001100000000010000000001100101"; --LW, Mem(101) => R(1) = 1
+			Memory(2)	<= "10001100000000100000000001100110"; --LW, Mem(102) => R(2) = 2
+			Memory(3)	<= "00000000001000100001100000100000"; --ADD, two previous values, R(3) = R(1) + R(2) = 3
+			Memory(4)	<= "10001100000001000000000001101001"; --LW, Mem(105) => R(4) = 0xFFFF
+			Memory(5)	<= "00000000100000110010100000100100"; --AND, R(5) = R(4) & R(3);
+			Memory(6)	<= "10001100000001100000000001101001"; --LW, Mem(105) => R(6) = 0xFFFF
+			Memory(7)	<= "00000000001001000011000000100000"; --ADD, R(6) = R(4) + R(1) = 1 - 1;
+			Memory(8)	<= "10001100000001110000000001101001"; --LW, Mem(105) => R(7) = 0xFFFF
+			Memory(9)	<= "00000000001001110011100000100010"; --SUB, R(7) = R(1) - R(7) = 1 - (-1) = 2;
+			Memory(10)  <= "00000000000001000100001000000000"; --SLL, R(8) = R(4) << 8 = 0xFFF0
+			Memory(11)  <= "00000000000010000100101000000011"; --SRA, R(9) = R(8) >> 8 = 0x0FFF
+			Memory(12)	<= "00000000000010000101001000000010"; --SRL, R(10) = R(8) >> 8 = 0x0FFF
+			Memory(13)	<= "00000001000010100101100000100100"; --AND, R(11) = R(10) and R(8) = 0x0FF0
+			Memory(14)	<= "00000001001010110110000000100101"; --OR, R(12) = R(11) or R(9) = 0xFFFF
+			Memory(15)	<= "10101100000011000000000000110010"; --SW, MEM(50) = R(12) = 0xFFFF
+			Memory(16)	<= "00010000100011000000000000111010"; --BEQ, PC = 75, R4 = R12 = 0xFFFF
+			Memory(75)	<= "00010100001000101111111111000101"; --BNE, PC = 17, R1 != R2
+			Memory(17)	<= "00001000000000000000000000010001"; --JUMP, final loop for program, PC -> Mem(10)
+
+			-- Data for test instructions
+			Memory(100) <= "00000000000000000000000000000000";
+			Memory(101) <= "00000000000000000000000000000001";
+			Memory(102) <= "00000000000000000000000000000010";
+			Memory(103) <= "00000000000000000000000000000011";
+			Memory(104) <= "00000000000000000000000000000100";
+			Memory(105) <= "11111111111111111111111111111111";
 			
-			-- p_Memory(100) <= "00000000000000000000000000000000";
-			-- p_Memory(101) <= "00000000000000000000000000000001";
-			-- p_Memory(102) <= "00000000000000000000000000000010";
-			-- p_Memory(103) <= "00000000000000000000000000000011";
-			-- p_Memory(104) <= "00000000000000000000000000000100";
+			PC <= "00000000000000000000000000000000";
+			PW <= "00000000000000000000000000000000";
+			R <= ((others=> (others=>'0')));
 		end if;
 		
 		wait until (Reset = '0' and CLK'event and CLK='1');
@@ -395,7 +418,7 @@ begin
 				--stuff
 				-- code Fetch --Instruction
 				PW <= Memory(to_integer(unsigned(PC)));
-				Instruction <= to_record(PW);
+				Instruction <= to_record(Memory(to_integer(unsigned(PC))));
 				
 				STATE <=Decode;
 			when Decode =>
@@ -408,7 +431,7 @@ begin
 				if Instruction.opcode = MSLL or Instruction.opcode = MSRL or Instruction.opcode = MSLA or Instruction.opcode = MSRA then
 					--ALU needs SHAMT
 					A <= R(to_integer(unsigned(Instruction.Rt)));
-					B <= R(to_integer(unsigned(Instruction.SHAMT)));
+					B <= zeros(31 downto 5) & Instruction.SHAMT;
 						
 				elsif PW(31 downto 26) = "000000" then
 					--interpret based upon MIPS GC column (1)
@@ -416,18 +439,29 @@ begin
 					
 					A <= R(to_integer(unsigned(Instruction.Rs)));
 					B <= R(to_integer(unsigned(Instruction.Rt)));
+
 				elsif Instruction.opcode = jump then
 					--interpret based upon MIPS GC column (0)
 					--J type instruction
 					
 					A <= R(0)(31 downto 26) & PW(25 downto 0);
+				elsif Instruction.opcode = lw or Instruction.opcode = sw then
+					--LW, SW 
+					A <= R(to_integer(unsigned(Instruction.Rs)));
+
+					-- Sign extend Immediate val
+					if( PW(15) = '1' ) then
+						B <= ones(31 downto 16) & PW(15 downto 0);
+					else
+						B <= zeros(31 downto 16) & PW(15 downto 0);
+					end if;
 				else
 					--interpret based upon MIPS GC column (0)
 					--I type instruction
-					
-					A <= std_logic_vector(unsigned(R(to_integer(unsigned(Instruction.Rs)))) + unsigned(PW(15 downto 0)));
+					-- BEQ, BNE
+					A <= R(to_integer(unsigned(Instruction.Rs)));
 					B <= R(to_integer(unsigned(Instruction.Rt)));
-					Q <= zeros(31 downto 0) & zeros(31 downto 16) & PW(15 downto 0);
+
 				end if;
 
 				Opcode <= Instruction.Opcode;
@@ -438,16 +472,7 @@ begin
 				if (Proc_ready ='0') then STATE<= Execute;
 				else STATE <= Retire;
 					--do more stuff -- code Execute (ALU) Instruction
-					
-					--interpret output from BNE and BEQ and transfer to Q
-					if (Instruction.opcode = bne or Instruction.opcode = beq) then
-						if unsigned(Q) = 1 then
-							Q <= zeros(31 downto 0) & PC(31 downto 0);
-						else
-							Q <= zeros(31 downto 0) & zeros(31 downto 16) & PW(15 downto 0);
-						end if;
-					end if;
-					
+				
 				end if;
 			when Retire =>
 				-- code Retire (Store Register, store memory, or Load memory)
@@ -465,16 +490,14 @@ begin
 					-- LW
 					R(to_integer(unsigned(Instruction.Rt))) <= Memory(to_integer(unsigned(Q(31 downto 0))));
 					
-					-- PC <= std_logic_vector(unsigned(PC) + 4);
 					PC <= std_logic_vector(unsigned(PC) + 1);
 					
 				elsif Instruction.opcode = sw then
 					--store value in memory(R[Rs])
 					
 					-- SW
-					Memory(to_integer( unsigned(R(to_integer(unsigned(Instruction.Rs)))) + unsigned(PW(15 downto 0)) )) <= Q(31 downto 0);
+					Memory(to_integer(unsigned(Q(31 downto 0)))) <= R(to_integer(unsigned(Instruction.Rt)));
 					
-					-- PC <= std_logic_vector(unsigned(PC) + 4);
 					PC <= std_logic_vector(unsigned(PC) + 1);
 				
 				elsif PW(31 downto 26) = "000000" then
@@ -482,11 +505,9 @@ begin
 					--R type instruction
 					
 					-- ADD, SUB, MPY, SLL, SRL, SLA, SRA, XOR, AND, OR, NOT, SLT, Comp
-					
 					--store Q (result) in Rd
 					R(to_integer(unsigned(Instruction.Rd))) <= Q(31 downto 0);
 					
-					-- PC <= std_logic_vector(unsigned(PC) + 4);
 					PC <= std_logic_vector(unsigned(PC) + 1);
 					
 				else
@@ -494,9 +515,16 @@ begin
 					--I type instruction
 					
 					-- BEQ, BNE
-					-- PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 4);
-					PC <= std_logic_vector(unsigned(Q(31 downto 0)) + 1);
-					
+					if unsigned(Q) = 1 then
+						if (PW(15) = '0') then
+							PC <= std_logic_vector( unsigned(PC) + unsigned(PW(15 downto 0)) + 1 );
+						else
+							temp := ones(31 downto 16) & PW(15 downto 0);
+							PC <= std_logic_vector( unsigned(PC) + unsigned(temp) + 1 );
+						end if;
+					else
+						PC <= std_logic_vector(unsigned(PC) + 1);
+					end if;
 				end if;
 				
 				STATE <= Fetch;
@@ -517,15 +545,11 @@ entity MCPROC_TB is
 end entity MCPROC_TB;
 --
 architecture TEST of MCPROC_TB is
-	signal A, B, PC, PW: std_logic_Vector (31 downto 0) := (others => '0');
-	signal Q: std_logic_vector (63 downto 0) := (others => '0');
+	signal PC, PW: std_logic_Vector (31 downto 0) := (others => '0');
 	Signal reset, clk: std_logic;
 	signal Memory: MEM1K := ((others => (others=>'0')));
-	signal proc_ready, proc_reset: std_logic := '1';
+	signal proc_reset: std_logic := '1';
 	signal Instruction: Tinstruction;
-	Signal GO: std_logic;
-	
-	signal get_data: std_logic := '0';
 --
 	file InFile  : text open read_mode  is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stimulus.txt";
 	file Outfile : text open write_mode is "\\minerfiles.mst.edu\dfs\users\msrbqb\Desktop\midterm\MIPSProcessor\stim_out.txt";
@@ -536,14 +560,9 @@ architecture TEST of MCPROC_TB is
 			  Memory			: inout MEM1K);
 	end component MCPROC;
 --
-	-- Potentially need this nonsense
 	for MY_PROC: MCPROC use entity work.MCPROC(First);
 begin
 	Reset <= '1','0' after 100 ps;
-	
-	-- Memory <= ((others => (others=>'0')));
-	-- PC_tab <= "00000000000000000000000000000000";
-	-- PW <= "00000000000000000000000000000000";
 	--
 	CLK_P: process
 	begin
@@ -553,64 +572,18 @@ begin
 		wait for 5 ps;
 	end process;
 
-	MY_PROC: MCPROC port map (PC, PW, CLK, proc_reset, Memory);
-	
-	Inst_get_data: process(get_data)
-		
-	begin
-		
-	end process;
+	MY_PROC: MCPROC port map (PC, PW, clk, proc_reset, Memory);
 
 	Inst_Stimulate: process(clk, reset)
-		variable temp_mem	: MEM1K;
-		variable L1			: line;
-		variable count		: integer := 0;
-		variable S1, S2, S3	: string (1 to 32);
-		variable S4			: string (1 to 64);
-		variable temp		: string(1 to 32) := (others => ' ');
-		
-		variable load_mem	: std_logic := '1';
 	begin
-		-- wait until (Reset='0' and CLK'event and CLK= '1');
 		if (Reset='0' and CLK'event and CLK= '1') then
 		
-			if (load_mem = '1') then
-				while (not endfile(InFile) and count < 1000) loop
-					-- Go <= '0';
-					readline(InFile, L1);-- you might need to read into a	--line!
-					read(L1, temp);
-
-					-- Read in instructions from file into memory structure
-					if count < 1000 then
-						-- temp_mem(count) := to_std_logic_vector(temp)(31 downto 0);
-						Memory(count) <= to_std_logic_vector(temp)(31 downto 0);
-						count := count + 1;
-					else
-						exit;
-					end if;
-					
-					
-			-- 			Instruction <= Conv(temp);
-
-			-- 			case Instruction.opcode is
-			-- 				-- when NOP => A <= A;
-			-- 				when others => Go <= '1'; -- will be calling the Microp
-			-- 			end case;
-				end loop;
-				
-				load_mem := '0';
-				
-				-- Memory <= temp_mem;
-			end if;
-			
-			-- S1 := to_string(PC);
-			-- S2 := to_string(PW);
-			-- S3 := to_string(B);
-			-- S4 := to_string(Q);
-			-- write(OutFile, S1 & " " & S2 & " " & S3 & " " & S4 & LF);
-
+			Instruction <= to_record(PW);
 			proc_reset <= '0';
 			
+			-- Set break point within fetch sequence of main processor
+			-- to view changing registers and data memory within the
+			-- processor.
 		end if;
 	end process;
 end architecture TEST;
