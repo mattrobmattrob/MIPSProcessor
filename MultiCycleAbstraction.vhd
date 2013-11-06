@@ -357,14 +357,11 @@ architecture First of MCProc is
 	signal A, B: std_logic_vector (31 downto 0):= (others => '0');
 	signal Q: std_logic_vector (63 downto 0):=(others => '0');
 	Signal R: REG32 := ((others=> (others=>'0')));
-	-- signal Memory: MEM1K := ((others=> (others=>'0')));
 	signal Opcode: Popcode;
 	signal Proc_ready: std_logic := '0';
 	signal Instruction: Tinstruction;
 	signal STATE: PSTATE := Fetch;
-
-	-- signal PC, PW: std_logic_vector (31 downto 0) := (others => '0');
-	
+	--
 	for ALU_32C: ALU_32 use entity work.ALU_32(Behavior);
 	--
 begin
